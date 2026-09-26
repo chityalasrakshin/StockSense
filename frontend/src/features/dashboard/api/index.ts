@@ -10,17 +10,5 @@ export interface DashboardKpis {
 }
 
 export async function getDashboardKpis(): Promise<DashboardKpis> {
-  try {
-    return await apiClient<DashboardKpis>('/dashboard/kpis');
-  } catch {
-    // Typed stub fallback with baseline metrics
-    return {
-      totalProducts: 48,
-      lowStockItems: 3,
-      pendingReceipts: 5,
-      pendingDeliveries: 2,
-      internalTransfersCount: 7,
-      recentLedgerActivity: 12,
-    };
-  }
+  return apiClient<DashboardKpis>('/dashboard/kpis');
 }

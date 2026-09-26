@@ -2,6 +2,7 @@
 
 import PageContainer from '@/components/layout/page-container';
 import { ArrowDownLeft, ArrowUpRight, Boxes, CheckCircle2, ChevronRight, Clock3, Download, Ellipsis, FilePlus2, Filter, PackageCheck, PackageOpen, Plus, RefreshCw, ScanLine, SlidersHorizontal, Truck, Warehouse } from 'lucide-react';
+import { useRealtimeStockUpdates } from '@/lib/realtime';
 
 const kpis = [
   { label: 'Inventory value', value: '$284,390', change: '+8.2%', detail: 'vs. last month', icon: Boxes, color: 'text-indigo-600 bg-indigo-50' },
@@ -35,6 +36,7 @@ function Status({ value }: { value: string }) {
 }
 
 export default function OverViewPage() {
+  useRealtimeStockUpdates();
   return (
     <PageContainer>
       <div className="min-h-full bg-[#f7f8fc] px-4 py-6 dark:bg-slate-950 sm:px-6 lg:px-8">

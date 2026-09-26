@@ -13,6 +13,7 @@ import { UomsModule } from './modules/uoms/uoms.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { ProductsModule } from './modules/products/products.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     WarehousesModule,
     ProductsModule,
     DocumentsModule,
+    RealtimeModule,
     DashboardModule,
   ],
   providers: [
