@@ -1,4 +1,5 @@
 import PageContainer from '@/components/layout/page-container';
+import { LocationTree } from '@/features/warehouses/components/location-tree';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const metadata = {
@@ -9,19 +10,18 @@ export default function WarehousesSettingsPage() {
   return (
     <PageContainer
       pageTitle="Warehouse Locations"
-      pageDescription="Configure hierarchical warehouses, zones, racks, and bin locations"
+      pageDescription="Configure hierarchical warehouses, zones, racks, and bin locations (WAREHOUSE → ZONE → RACK → BIN)"
     >
       <Card>
         <CardHeader>
           <CardTitle>Location Hierarchy</CardTitle>
           <CardDescription>
-            Multi-warehouse tree topology supporting granular stock tracking down to the bin level.
+            Multi-warehouse tree topology — hover any node to see management controls. Each movement
+            is tracked per product × per location in the immutable ledger.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center p-8 text-sm text-muted-foreground border rounded-lg border-dashed">
-            Warehouse configuration will load from the backend locations API.
-          </div>
+          <LocationTree />
         </CardContent>
       </Card>
     </PageContainer>

@@ -48,6 +48,23 @@ export class UsersController {
   }
 
   @ApiOperation({
+    summary: 'Update current user profile',
+    description: 'Allows authenticated user to update their own profile (email, password).',
+  })
+  @ApiResponse({ status: HttpStatus.OK, type: UserItemDto })
+  @ApiUnauthorizedResponse({ description: 'Authentication required' })
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  async updateMe(
+    @CurrentUser() user: { id: string },
+    @Body() dto: UpdateUserDto,
+  ): Promise<UserItemDto> {
+    // Only allow updating email and password, not role or isActive
+    const { role: _r, isActive: _a, ...allowed } = dto;
+    return this.usersService.update(user.id, allowed);
+  }
+
+  @ApiOperation({
     summary: 'RBAC verification placeholder: Inventory Manager access only',
     description:
       'Verification endpoint to prove that Warehouse Staff receives HTTP 403 Forbidden while Inventory Manager is permitted.',

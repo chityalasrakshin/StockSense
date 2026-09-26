@@ -1,28 +1,28 @@
 import PageContainer from '@/components/layout/page-container';
+import { MoveHistoryTable } from '@/features/ledger/components/move-history-table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const metadata = {
   title: 'StockSense — Move History',
+  description: 'Immutable audit trail of every stock movement',
 };
 
 export default function MoveHistoryPage() {
   return (
     <PageContainer
       pageTitle="Move History (Stock Ledger)"
-      pageDescription="Immutable, append-only audit trail of every stock movement and transaction"
+      pageDescription="Immutable, append-only audit trail of every validated stock movement. Never edited or deleted."
     >
       <Card>
         <CardHeader>
-          <CardTitle>Immutable Ledger Trail</CardTitle>
+          <CardTitle>Ledger Entries</CardTitle>
           <CardDescription>
-            Every validated Receipt, Delivery, Transfer, and Adjustment is permanently recorded
-            here.
+            Every validated Receipt, Delivery, Transfer, and Adjustment posts permanent ledger rows
+            here. Use filters to drill into specific products, locations, or date windows.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center p-8 text-sm text-muted-foreground border rounded-lg border-dashed">
-            Ledger transactions will populate automatically upon validating operations documents.
-          </div>
+          <MoveHistoryTable />
         </CardContent>
       </Card>
     </PageContainer>

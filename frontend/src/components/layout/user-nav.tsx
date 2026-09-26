@@ -11,8 +11,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/features/auth/context/auth-context';
+import Link from 'next/link';
 
 export function UserNav() {
+  const { user, role, logout } = useAuth();
+
+  const roleLabel =
+    role === 'INVENTORY_MANAGER'
+      ? 'Inventory Manager'
+      : role === 'WAREHOUSE_STAFF'
+        ? 'Warehouse Staff'
+        : 'User';
+
+  const initials = user?.email
+    ? user.email.slice(0, 2).toUpperCase()
+    : role === 'INVENTORY_MANAGER'
+      ? 'IM'
+      : 'WS';
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -24,7 +41,7 @@ export function UserNav() {
           >
             <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-primary/10 text-primary font-semibold text-xs">
-                IM
+                {initials}
               </AvatarFallback>
             </Avatar>
           </Button>
@@ -34,20 +51,32 @@ export function UserNav() {
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">Inventory Manager</p>
-              <p className="text-xs leading-none text-muted-foreground">manager@stocksense.local</p>
+              <p className="text-sm font-medium leading-none">{roleLabel}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {user?.email || 'authenticated'}
+              </p>
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem>
-            Role: <span className="ml-1 font-semibold text-primary">Manager</span>
+            Role:{' '}
+            <span className="ml-1 font-semibold text-primary">
+              {role === 'INVENTORY_MANAGER' ? 'Manager' : 'Staff'}
+            </span>
           </DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/dashboard/profile" />}>
+            My Profile
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>Log out</DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive cursor-pointer"
+          onClick={() => logout()}
+        >
+          Log out
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

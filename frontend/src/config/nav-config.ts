@@ -85,4 +85,25 @@ export const navGroups: NavGroup[] = [
       },
     ],
   },
+  {
+    label: 'Profile Menu',
+    items: [
+      {
+        title: 'My Profile',
+        url: '/dashboard/profile',
+        icon: 'user',
+        shortcut: ['m', 'p'],
+        isActive: false,
+        items: [],
+      },
+      {
+        title: 'Logout',
+        url: '#logout',
+        icon: 'logout',
+        shortcut: ['l', 'o'],
+        isActive: false,
+        items: [],
+      },
+    ],
+  },
 ];

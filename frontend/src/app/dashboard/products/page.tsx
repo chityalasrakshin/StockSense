@@ -1,37 +1,29 @@
 import PageContainer from '@/components/layout/page-container';
-import { buttonVariants } from '@/components/ui/button';
-import ProductListingPage from '@/features/products/components/product-listing';
-import { searchParamsCache } from '@/lib/searchparams';
-import { cn } from '@/lib/utils';
-import { Icons } from '@/components/icons';
-import Link from 'next/link';
-import { SearchParams } from 'nuqs/server';
-import { productInfoContent } from '@/config/infoconfig';
+import { ProductsPanel } from '@/features/products/components/products-panel';
+import { MasterDataManagement } from '@/features/products/components/master-data-management';
+import { Separator } from '@/components/ui/separator';
 
 export const metadata = {
-  title: 'Dashboard: Products',
+  title: 'StockSense — Products',
+  description: 'Manage products, categories, and units of measure',
 };
 
-type pageProps = {
-  searchParams: Promise<SearchParams>;
-};
-
-export default async function Page(props: pageProps) {
-  const searchParams = await props.searchParams;
-  searchParamsCache.parse(searchParams);
-
+export default function ProductsPage() {
   return (
     <PageContainer
       pageTitle="Products"
-      pageDescription="Manage products (React Query + nuqs table pattern.)"
-      infoContent={productInfoContent}
-      pageHeaderAction={
-        <Link href="/dashboard/product/new" className={cn(buttonVariants(), 'text-xs md:text-sm')}>
-          <Icons.add className="mr-2 h-4 w-4" /> Add New
-        </Link>
-      }
+      pageDescription="Product catalogue with real-time stock balances, smart search (pg_trgm), and master data management"
     >
-      <ProductListingPage />
+      <div className="space-y-6">
+        <ProductsPanel />
+        <Separator />
+        <div>
+          <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+            Master Data
+          </h2>
+          <MasterDataManagement />
+        </div>
+      </div>
     </PageContainer>
   );
 }

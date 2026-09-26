@@ -5,6 +5,7 @@ import { Breadcrumbs } from '../breadcrumbs';
 import SearchInput from '../search-input';
 import { ThemeModeToggle } from '../themes/theme-mode-toggle';
 import { UserNav } from './user-nav';
+import { LowStockAlertBell } from '@/features/dashboard/components/low-stock-alert-bell';
 
 export default function Header() {
   return (
@@ -19,6 +20,7 @@ export default function Header() {
         <div className="hidden md:flex">
           <SearchInput />
         </div>
+        <LowStockAlertBell />
         <ThemeModeToggle />
         <UserNav />
       </div>

@@ -18,6 +18,7 @@ import {
 import { navGroups } from '@/config/nav-config';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useFilteredNavGroups } from '@/hooks/use-nav';
+import { useAuth } from '@/features/auth/context/auth-context';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as React from 'react';
@@ -26,6 +27,7 @@ import { Icons } from '@/components/icons';
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
+  const { logout } = useAuth();
   const filteredGroups = useFilteredNavGroups(navGroups);
 
   React.useEffect(() => {
@@ -90,14 +92,28 @@ export default function AppSidebar() {
                   </Collapsible>
                 ) : (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      render={<Link href={item.url} aria-label={item.title} />}
-                      tooltip={item.title}
-                      isActive={pathname === item.url}
-                    >
-                      <Icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
+                    {item.title === 'Logout' ? (
+                      <SidebarMenuButton
+                        tooltip={item.title}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          logout();
+                        }}
+                        className="cursor-pointer text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton
+                        render={<Link href={item.url} aria-label={item.title} />}
+                        tooltip={item.title}
+                        isActive={pathname === item.url}
+                      >
+                        <Icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

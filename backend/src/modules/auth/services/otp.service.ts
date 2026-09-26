@@ -81,6 +81,7 @@ export class OtpService {
 
     // Generate 6-digit numeric OTP
     const rawOtp = this.generateNumericOtp();
+    this.logger.log(`[OtpService] DEV-ONLY: Generated 6-digit OTP for ${user.email}: ${rawOtp}`);
 
     // Hash at rest - NEVER store plaintext code in database
     const codeHash = await this.hashOtp(rawOtp);
