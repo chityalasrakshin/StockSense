@@ -1,7 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
@@ -11,6 +13,16 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);
+  const cookieSecret = configService.get<string>(
+    'COOKIE_SECRET',
+    'stocksense_cookie_secret_dev_key_32_chars_123',
+  );
+
+  // Helmet security headers
+  app.use(helmet());
+
+  // Cookie parser middleware for httpOnly refresh tokens
+  app.use(cookieParser(cookieSecret));
 
   // Enable CORS
   app.enableCors({
@@ -23,16 +35,39 @@ async function bootstrap() {
     exclude: ['api/docs', 'api/docs/(.*)'],
   });
 
+  // Global input validation pipe via class-validator DTOs
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+
   // Global exception filter with standard error envelope
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Swagger / OpenAPI documentation
   const swaggerConfig = new DocumentBuilder()
     .setTitle('StockSense API')
-    .setDescription('StockSense Inventory Management System — OpenAPI / Swagger Specification')
+    .setDescription(
+      'StockSense Inventory Management System — OpenAPI Specification\n\n' +
+        'Core endpoints for Authentication, OTP Password Reset, RBAC Verification, and User Management.',
+    )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Provide JWT access token (~15min TTL)',
+      },
+      'bearer',
+    )
     .addTag('Health', 'System health checks')
+    .addTag('Auth', 'Authentication, JWT rotation, and OTP password reset')
+    .addTag('Users', 'User CRUD and RBAC role verification (Manager vs Staff)')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

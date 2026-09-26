@@ -65,6 +65,7 @@ CREATE TABLE "products" (
     "id" TEXT NOT NULL,
     "sku" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "unit_cost" DECIMAL(12,2) NOT NULL DEFAULT 0.0,
     "category_id" TEXT,
     "uom_id" TEXT,
     "reorder_point" INTEGER NOT NULL DEFAULT 10,
@@ -79,6 +80,7 @@ CREATE TABLE "products" (
 CREATE TABLE "locations" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "short_code" TEXT NOT NULL,
     "type" "LocationType" NOT NULL DEFAULT 'WAREHOUSE',
     "parent_id" TEXT,
 
@@ -88,12 +90,16 @@ CREATE TABLE "locations" (
 -- CreateTable
 CREATE TABLE "documents" (
     "id" TEXT NOT NULL,
+    "reference" TEXT NOT NULL,
     "type" "DocumentType" NOT NULL,
     "status" "DocumentStatus" NOT NULL DEFAULT 'DRAFT',
     "source_location_id" TEXT,
     "dest_location_id" TEXT,
+    "contact" TEXT,
     "partner_ref" TEXT,
+    "schedule_date" TIMESTAMP(3),
     "created_by" TEXT NOT NULL,
+    "responsible_user_id" TEXT NOT NULL,
     "validated_by" TEXT,
     "validated_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -156,6 +162,12 @@ CREATE INDEX "products_sku_idx" ON "products" USING GIN ("sku" gin_trgm_ops);
 CREATE INDEX "products_name_idx" ON "products" USING GIN ("name" gin_trgm_ops);
 
 -- CreateIndex
+CREATE UNIQUE INDEX "locations_short_code_key" ON "locations"("short_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "documents_reference_key" ON "documents"("reference");
+
+-- CreateIndex
 CREATE INDEX "documents_status_type_created_at_idx" ON "documents"("status", "type", "created_at");
 
 -- CreateIndex
@@ -184,6 +196,9 @@ ALTER TABLE "documents" ADD CONSTRAINT "documents_dest_location_id_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "documents" ADD CONSTRAINT "documents_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "documents" ADD CONSTRAINT "documents_responsible_user_id_fkey" FOREIGN KEY ("responsible_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "documents" ADD CONSTRAINT "documents_validated_by_fkey" FOREIGN KEY ("validated_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

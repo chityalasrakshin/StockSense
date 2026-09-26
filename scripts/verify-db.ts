@@ -75,7 +75,7 @@ async function main() {
 
   // 6. Verify balances values
   const balRes = await client.query(`
-    SELECT p.sku, p.name, l.name as location, b.quantity
+    SELECT p.sku, p.name, p.unit_cost, l.name as location, l.short_code, b.quantity
     FROM stock_balances b
     JOIN products p ON p.id = b.product_id
     JOIN locations l ON l.id = b.location_id
@@ -83,7 +83,50 @@ async function main() {
   `);
   console.log('\nCurrent Stock Balances:');
   for (const b of balRes.rows) {
-    console.log(` - ${b.name} (${b.sku}) at ${b.location}: ${b.quantity} kg`);
+    console.log(
+      ` - ${b.name} (${b.sku}, cost: $${b.unit_cost}) at [${b.short_code}] ${b.location}: ${b.quantity} on hand`,
+    );
+  }
+
+  // 7. Verify document fields (reference, contact, schedule_date, responsible_user)
+  const docRes = await client.query(`
+    SELECT d.reference, d.type, d.status, d.contact, d.schedule_date, u.email as responsible_user
+    FROM documents d
+    JOIN users u ON u.id = d.responsible_user_id
+    ORDER BY d.created_at;
+  `);
+  console.log('\nSeeded Documents:');
+  for (const d of docRes.rows) {
+    console.log(
+      ` - [${d.reference}] ${d.type} (${d.status}) | Contact: ${d.contact || 'N/A'} | Scheduled: ${d.schedule_date ? d.schedule_date.toISOString() : 'N/A'} | Responsible: ${d.responsible_user}`,
+    );
+    if (!d.reference || !d.responsible_user) {
+      throw new Error(`Document ${d.reference} missing required reference or responsible_user!`);
+    }
+  }
+
+  // 8. Verify "Free to Use" stock dynamic calculation (Prompt 5/6 design)
+  // Free to Use = stock_balances.quantity - SUM(lines in READY/WAITING for DELIVERY or TRANSFER out)
+  const freeToUseRes = await client.query(`
+    SELECT 
+      p.sku,
+      p.name,
+      b.quantity as on_hand_qty,
+      COALESCE(SUM(dl.expected_qty), 0) as reserved_qty,
+      b.quantity - COALESCE(SUM(dl.expected_qty), 0) as free_to_use_qty
+    FROM stock_balances b
+    JOIN products p ON p.id = b.product_id
+    LEFT JOIN documents d ON d.source_location_id = b.location_id 
+      AND d.type IN ('DELIVERY', 'TRANSFER') 
+      AND d.status IN ('READY', 'WAITING')
+    LEFT JOIN document_lines dl ON dl.document_id = d.id AND dl.product_id = b.product_id
+    GROUP BY p.sku, p.name, b.quantity;
+  `);
+  console.log('\nFree to Use Stock Calculations (Dynamic Query):');
+  for (const f of freeToUseRes.rows) {
+    console.log(
+      ` - ${f.name} (${f.sku}): On Hand = ${f.on_hand_qty}, Reserved = ${f.reserved_qty}, Free to Use = ${f.free_to_use_qty}`,
+    );
   }
 
   await client.end();

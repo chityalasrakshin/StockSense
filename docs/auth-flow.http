@@ -1,0 +1,127 @@
+### StockSense Auth & RBAC API Flow (REST Client / Postman compatible)
+@baseUrl = http://localhost:4000/api/v1
+@contentType = application/json
+
+### 1. Health Check
+GET {{baseUrl}}/health
+Accept: {{contentType}}
+
+### 2. User Signup
+# @name signup
+POST {{baseUrl}}/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "operator.test@stocksense.dev",
+  "password": "Password123!",
+  "role": "WAREHOUSE_STAFF"
+}
+
+### 3. Login as Inventory Manager (Seeded user)
+# @name loginManager
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "manager@stocksense.dev",
+  "password": "password123"
+}
+
+### Store Manager Token
+@managerToken = {{loginManager.response.body.accessToken}}
+
+### 4. Login as Warehouse Staff (Seeded user)
+# @name loginStaff
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "staff@stocksense.dev",
+  "password": "password123"
+}
+
+### Store Staff Token
+@staffToken = {{loginStaff.response.body.accessToken}}
+
+### 5. Rotate Refresh Token (Rotation Flow)
+# Note: In browser/Postman, refreshToken cookie is sent automatically.
+# Fallback body provides testability in CLI tools.
+# @name refreshToken
+POST {{baseUrl}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": ""
+}
+
+### 6. Reuse Detection Test (Replaying an Old / Revoked Refresh Token)
+# Submitting an old refresh token returns HTTP 401 and invalidates the session family
+POST {{baseUrl}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "already-rotated-or-revoked-token"
+}
+
+### 7. Request Password Reset OTP (Rate-limited endpoint)
+# Check backend console output for simulated email containing the 6-digit OTP code
+POST {{baseUrl}}/auth/otp/request
+Content-Type: {{contentType}}
+
+{
+  "email": "operator.test@stocksense.dev"
+}
+
+### 8. Verify OTP and Reset Password
+# Replace OTP with the 6-digit code logged in dev console
+POST {{baseUrl}}/auth/otp/verify-reset
+Content-Type: {{contentType}}
+
+{
+  "email": "operator.test@stocksense.dev",
+  "otp": "123456",
+  "newPassword": "NewSecurePassword2026!"
+}
+
+### 9. Login with New Password
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "operator.test@stocksense.dev",
+  "password": "NewSecurePassword2026!"
+}
+
+### 10. Get Current User Profile (@CurrentUser)
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{managerToken}}
+Accept: {{contentType}}
+
+### 11. RBAC Test: Manager accesses Manager-Only Route (Expect HTTP 200)
+GET {{baseUrl}}/users/placeholder/manager-only
+Authorization: Bearer {{managerToken}}
+Accept: {{contentType}}
+
+### 12. RBAC Test: Warehouse Staff attempts Manager-Only Route (Expect HTTP 403 Forbidden)
+GET {{baseUrl}}/users/placeholder/manager-only
+Authorization: Bearer {{staffToken}}
+Accept: {{contentType}}
+
+### 13. RBAC Test: Warehouse Staff accesses Staff-Permitted Route (Expect HTTP 200)
+GET {{baseUrl}}/users/placeholder/staff-accessible
+Authorization: Bearer {{staffToken}}
+Accept: {{contentType}}
+
+### 14. List Users (Manager Only)
+GET {{baseUrl}}/users?page=1&limit=10
+Authorization: Bearer {{managerToken}}
+Accept: {{contentType}}
+
+### 15. Logout (Revokes Refresh Token Family)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{managerToken}}
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": ""
+}

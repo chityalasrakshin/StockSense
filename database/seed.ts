@@ -25,6 +25,7 @@ const IDS = {
     rawMaterials: 'c0000000-0000-0000-0000-000000000001',
     metals: 'c0000000-0000-0000-0000-000000000002',
     fasteners: 'c0000000-0000-0000-0000-000000000003',
+    furniture: 'c0000000-0000-0000-0000-000000000004',
   },
   uom: {
     kg: 'u0000000-0000-0000-0000-000000000001',
@@ -34,6 +35,7 @@ const IDS = {
   product: {
     steelRods: 'p0000000-0000-0000-0000-000000000001',
     boltsM12: 'p0000000-0000-0000-0000-000000000002',
+    officeDesk: 'p0000000-0000-0000-0000-000000000003',
   },
   location: {
     mainWarehouse: 'l0000000-0000-0000-0000-000000000001',
@@ -64,7 +66,7 @@ const IDS = {
 };
 
 // Default password hash for 'password123' (bcrypt cost 10)
-const DEMO_PASSWORD_HASH = '$2b$10$ep/0tT0nKq3fGzN4/eZseeg5e1PcvbK/m85yLqgLsqYkWgNnQkH9q';
+const DEMO_PASSWORD_HASH = '$2b$10$bVlK.vJZIcJIWGH0JQ.52./8KxmbJSvcsIyPbqqZO62JxlLlGr60i';
 
 async function main() {
   console.log('🌱 Starting StockSense demo dataset seeding...');
@@ -157,7 +159,7 @@ async function main() {
     },
   });
 
-  await prisma.category.upsert({
+  const catFasteners = await prisma.category.upsert({
     where: { name: 'Fasteners & Hardware' },
     update: {},
     create: {
@@ -166,13 +168,25 @@ async function main() {
     },
   });
 
-  console.log(`  ✓ Categories seeded: Raw Materials -> Metals & Alloys, Fasteners & Hardware`);
+  const catFurniture = await prisma.category.upsert({
+    where: { name: 'Office Furniture' },
+    update: {},
+    create: {
+      id: IDS.category.furniture,
+      name: 'Office Furniture',
+    },
+  });
 
-  // 4. Products (including "Steel Rods" worked example)
+  console.log(
+    `  ✓ Categories seeded: Raw Materials -> Metals & Alloys, Fasteners & Hardware, Office Furniture`,
+  );
+
+  // 4. Products (including "Steel Rods" worked example and "Desk" from UX mockup)
   const productSteelRods = await prisma.product.upsert({
     where: { sku: 'STEEL-ROD-001' },
     update: {
       name: 'Steel Rods',
+      unitCost: 45.0,
       categoryId: catMetals.id,
       uomId: uomKg.id,
       reorderPoint: 25,
@@ -182,6 +196,7 @@ async function main() {
       id: IDS.product.steelRods,
       sku: 'STEEL-ROD-001',
       name: 'Steel Rods',
+      unitCost: 45.0,
       categoryId: catMetals.id,
       uomId: uomKg.id,
       reorderPoint: 25,
@@ -193,7 +208,8 @@ async function main() {
     where: { sku: 'BOLT-M12-100' },
     update: {
       name: 'M12 Industrial Bolts (100mm)',
-      categoryId: IDS.category.fasteners,
+      unitCost: 1.25,
+      categoryId: catFasteners.id,
       uomId: uomPcs.id,
       reorderPoint: 50,
       reorderQty: 250,
@@ -202,25 +218,52 @@ async function main() {
       id: IDS.product.boltsM12,
       sku: 'BOLT-M12-100',
       name: 'M12 Industrial Bolts (100mm)',
-      categoryId: IDS.category.fasteners,
+      unitCost: 1.25,
+      categoryId: catFasteners.id,
       uomId: uomPcs.id,
       reorderPoint: 50,
       reorderQty: 250,
     },
   });
 
-  console.log(`  ✓ Products seeded: ${productSteelRods.name} (${productSteelRods.sku})`);
+  await prisma.product.upsert({
+    where: { sku: 'DESK-001' },
+    update: {
+      name: 'Office Desk',
+      unitCost: 3000.0,
+      categoryId: catFurniture.id,
+      uomId: uomPcs.id,
+      reorderPoint: 10,
+      reorderQty: 20,
+    },
+    create: {
+      id: IDS.product.officeDesk,
+      sku: 'DESK-001',
+      name: 'Office Desk',
+      unitCost: 3000.0,
+      categoryId: catFurniture.id,
+      uomId: uomPcs.id,
+      reorderPoint: 10,
+      reorderQty: 20,
+    },
+  });
 
-  // 5. Locations (ERPNext-style self-referencing tree)
+  console.log(
+    `  ✓ Products seeded: ${productSteelRods.name} (SKU: ${productSteelRods.sku}, Unit Cost: $${productSteelRods.unitCost})`,
+  );
+
+  // 5. Locations (ERPNext-style self-referencing tree with unique short codes)
   const locMainWarehouse = await prisma.location.upsert({
     where: { id: IDS.location.mainWarehouse },
     update: {
       name: 'Main Warehouse',
+      shortCode: 'WH',
       type: LocationType.WAREHOUSE,
     },
     create: {
       id: IDS.location.mainWarehouse,
       name: 'Main Warehouse',
+      shortCode: 'WH',
       type: LocationType.WAREHOUSE,
     },
   });
@@ -229,12 +272,14 @@ async function main() {
     where: { id: IDS.location.productionRack },
     update: {
       name: 'Production Rack',
+      shortCode: 'WH-PR',
       type: LocationType.RACK,
       parentId: locMainWarehouse.id,
     },
     create: {
       id: IDS.location.productionRack,
       name: 'Production Rack',
+      shortCode: 'WH-PR',
       type: LocationType.RACK,
       parentId: locMainWarehouse.id,
     },
@@ -244,22 +289,30 @@ async function main() {
     where: { id: IDS.location.receivingBay },
     update: {
       name: 'Receiving Bay A',
+      shortCode: 'WH-REC',
       type: LocationType.ZONE,
       parentId: locMainWarehouse.id,
     },
     create: {
       id: IDS.location.receivingBay,
       name: 'Receiving Bay A',
+      shortCode: 'WH-REC',
       type: LocationType.ZONE,
       parentId: locMainWarehouse.id,
     },
   });
 
   console.log(
-    `  ✓ Locations seeded: ${locMainWarehouse.name} (WAREHOUSE) -> ${locProductionRack.name} (RACK)`,
+    `  ✓ Locations seeded: ${locMainWarehouse.name} [${locMainWarehouse.shortCode}] -> ${locProductionRack.name} [${locProductionRack.shortCode}]`,
   );
 
   // 6. Documents & Ledger: Reproducing the PDF worked example sequence
+  // Operation prefix formatting rule: <warehouse.short_code>/<IN or OUT>/<sequence>
+  // - RECEIPT: IN
+  // - DELIVERY: OUT
+  // - TRANSFER: OUT (dispatched from source warehouse)
+  // - ADJUSTMENT: OUT (for decrement / scrap / loss)
+
   // Step A: Receipt 100kg Steel Rods into Main Warehouse (Status: DONE)
   const existingDoc1 = await prisma.document.findUnique({
     where: { id: IDS.document.doc1Receipt },
@@ -269,13 +322,17 @@ async function main() {
     const doc1 = await prisma.document.create({
       data: {
         id: IDS.document.doc1Receipt,
+        reference: 'WH/IN/00001',
         type: DocumentType.RECEIPT,
         status: DocumentStatus.DONE,
         destLocationId: locMainWarehouse.id,
+        contact: 'Vandertramp Steels Ltd.',
         partnerRef: 'PO-2026-STEEL-001',
+        scheduleDate: new Date(Date.now() - 3600 * 1000 * 24 * 3),
         createdById: manager.id,
+        responsibleUserId: staff.id,
         validatedById: staff.id,
-        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 3), // 3 days ago
+        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 3),
         createdAt: new Date(Date.now() - 3600 * 1000 * 24 * 3),
         lines: {
           create: {
@@ -302,11 +359,12 @@ async function main() {
       },
     });
 
-    console.log('  ✓ Step 1: Receipt document validated (+100kg into Main Warehouse)');
+    console.log(
+      `  ✓ Step 1: Receipt validated [${doc1.reference}] (+100kg into Main Warehouse from ${doc1.contact})`,
+    );
   }
 
   // Step B: Internal Transfer 30kg from Main Warehouse to Production Rack (Status: DONE)
-  // Non-negotiable domain rule: Dual ledger entry netting zero across system
   const existingDoc2 = await prisma.document.findUnique({
     where: { id: IDS.document.doc2Transfer },
   });
@@ -315,14 +373,18 @@ async function main() {
     const doc2 = await prisma.document.create({
       data: {
         id: IDS.document.doc2Transfer,
+        reference: 'WH/OUT/00001',
         type: DocumentType.TRANSFER,
         status: DocumentStatus.DONE,
         sourceLocationId: locMainWarehouse.id,
         destLocationId: locProductionRack.id,
+        contact: 'Internal Assembly Team',
         partnerRef: 'INT-TRANS-001',
+        scheduleDate: new Date(Date.now() - 3600 * 1000 * 24 * 2),
         createdById: staff.id,
+        responsibleUserId: staff.id,
         validatedById: staff.id,
-        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 2), // 2 days ago
+        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 2),
         createdAt: new Date(Date.now() - 3600 * 1000 * 24 * 2),
         lines: {
           create: {
@@ -363,11 +425,11 @@ async function main() {
     });
 
     console.log(
-      '  ✓ Step 2: Internal Transfer validated (-30kg Main Warehouse, +30kg Production Rack)',
+      `  ✓ Step 2: Transfer validated [${doc2.reference}] (-30kg Main Warehouse, +30kg Production Rack)`,
     );
   }
 
-  // Step C: Delivery Order 20kg shipped from Main Warehouse (Status: DONE)
+  // Step C: Delivery Order 20kg shipped from Main Warehouse to Azure Interior (Status: DONE)
   const existingDoc3 = await prisma.document.findUnique({
     where: { id: IDS.document.doc3Delivery },
   });
@@ -376,13 +438,17 @@ async function main() {
     const doc3 = await prisma.document.create({
       data: {
         id: IDS.document.doc3Delivery,
+        reference: 'WH/OUT/00002',
         type: DocumentType.DELIVERY,
         status: DocumentStatus.DONE,
         sourceLocationId: locMainWarehouse.id,
-        partnerRef: 'SO-2026-CUST-88',
+        contact: 'Azure Interior', // Matching UX Mockup
+        partnerRef: 'SO-2026-AZURE-88',
+        scheduleDate: new Date(Date.now() - 3600 * 1000 * 24 * 1),
         createdById: manager.id,
+        responsibleUserId: staff.id,
         validatedById: staff.id,
-        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 1), // 1 day ago
+        validatedAt: new Date(Date.now() - 3600 * 1000 * 24 * 1),
         createdAt: new Date(Date.now() - 3600 * 1000 * 24 * 1),
         lines: {
           create: {
@@ -408,7 +474,9 @@ async function main() {
       },
     });
 
-    console.log('  ✓ Step 3: Delivery validated (-20kg from Main Warehouse)');
+    console.log(
+      `  ✓ Step 3: Delivery validated [${doc3.reference}] (-20kg from Main Warehouse to ${doc3.contact})`,
+    );
   }
 
   // Step D: Stock Adjustment: -3kg damaged at Main Warehouse (Status: DONE)
@@ -420,13 +488,17 @@ async function main() {
     const doc4 = await prisma.document.create({
       data: {
         id: IDS.document.doc4Adjustment,
+        reference: 'WH/OUT/00003',
         type: DocumentType.ADJUSTMENT,
         status: DocumentStatus.DONE,
         sourceLocationId: locMainWarehouse.id,
+        contact: 'Quality Control / Scrap',
         partnerRef: 'ADJ-COUNT-DAMAGED-3KG',
+        scheduleDate: new Date(Date.now() - 3600 * 1000 * 12),
         createdById: manager.id,
+        responsibleUserId: manager.id,
         validatedById: manager.id,
-        validatedAt: new Date(Date.now() - 3600 * 1000 * 12), // 12 hours ago
+        validatedAt: new Date(Date.now() - 3600 * 1000 * 12),
         createdAt: new Date(Date.now() - 3600 * 1000 * 12),
         lines: {
           create: {
@@ -452,22 +524,32 @@ async function main() {
       },
     });
 
-    console.log('  ✓ Step 4: Adjustment validated (-3kg delta at Main Warehouse)');
+    console.log(
+      `  ✓ Step 4: Adjustment validated [${doc4.reference}] (-3kg delta at Main Warehouse)`,
+    );
   }
 
   // Step E: Pending document in WAITING state for active dashboard display
   await prisma.document.upsert({
     where: { id: IDS.document.doc5PendingReceipt },
     update: {
+      reference: 'WH/IN/00002',
       status: DocumentStatus.WAITING,
+      contact: 'Apex Metal Suppliers',
+      scheduleDate: new Date(Date.now() + 3600 * 1000 * 24 * 1),
+      responsibleUserId: manager.id,
     },
     create: {
       id: IDS.document.doc5PendingReceipt,
+      reference: 'WH/IN/00002',
       type: DocumentType.RECEIPT,
       status: DocumentStatus.WAITING,
       destLocationId: locMainWarehouse.id,
+      contact: 'Apex Metal Suppliers',
       partnerRef: 'PO-2026-INCOMING-50KG',
+      scheduleDate: new Date(Date.now() + 3600 * 1000 * 24 * 1),
       createdById: manager.id,
+      responsibleUserId: manager.id,
       createdAt: new Date(),
       lines: {
         create: {
@@ -479,7 +561,9 @@ async function main() {
     },
   });
 
-  console.log('  ✓ Step 5: Pending Receipt document created (status: WAITING, 50kg expected)');
+  console.log(
+    '  ✓ Step 5: Pending Receipt created [WH/IN/00002] (status: WAITING, 50kg expected from Apex Metal)',
+  );
 
   // 7. Synchronize stock_balances (derived read-model cache)
   // Final state: Main Warehouse = 47kg, Production Rack = 30kg

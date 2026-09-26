@@ -11,6 +11,8 @@
     "db:server": "tsx scripts/db-server.ts",
     "db:rollback": "tsx scripts/rollback.ts",
     "seed": "tsx database/seed.ts",
+    "verify:db": "tsx scripts/verify-db.ts",
+    "verify:auth": "tsx scripts/test-api.ts",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "typecheck": "pnpm -r run typecheck",

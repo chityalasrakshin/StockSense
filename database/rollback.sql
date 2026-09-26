@@ -15,6 +15,7 @@ ALTER TABLE "stock_ledger" DROP CONSTRAINT IF EXISTS "stock_ledger_product_id_fk
 ALTER TABLE "document_lines" DROP CONSTRAINT IF EXISTS "document_lines_product_id_fkey";
 ALTER TABLE "document_lines" DROP CONSTRAINT IF EXISTS "document_lines_document_id_fkey";
 ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_validated_by_fkey";
+ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_responsible_user_id_fkey";
 ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_created_by_fkey";
 ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_dest_location_id_fkey";
 ALTER TABLE "documents" DROP CONSTRAINT IF EXISTS "documents_source_location_id_fkey";
