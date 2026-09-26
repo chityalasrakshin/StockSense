@@ -1,0 +1,191 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  INVENTORY_MANAGER
+  WAREHOUSE_STAFF
+}
+
+enum DocumentType {
+  RECEIPT
+  DELIVERY
+  TRANSFER
+  ADJUSTMENT
+}
+
+enum DocumentStatus {
+  DRAFT
+  WAITING
+  READY
+  DONE
+  CANCELED
+}
+
+enum LocationType {
+  WAREHOUSE
+  ZONE
+  RACK
+  BIN
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(WAREHOUSE_STAFF)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  otpCodes      OtpCode[]
+  createdDocs   Document[]    @relation("DocumentCreatedBy")
+  validatedDocs Document[]    @relation("DocumentValidatedBy")
+  ledgerEntries StockLedger[]
+
+  @@map("users")
+}
+
+model OtpCode {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  codeHash   String    @map("code_hash")
+  purpose    String
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otp_codes")
+}
+
+model Category {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  parentId  String?    @map("parent_id")
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+  products  Product[]
+
+  @@map("categories")
+}
+
+model UnitOfMeasure {
+  id       String    @id @default(uuid())
+  code     String    @unique
+  name     String
+  products Product[]
+
+  @@map("units_of_measure")
+}
+
+model Product {
+  id           String         @id @default(uuid())
+  sku          String         @unique
+  name         String
+  categoryId   String?        @map("category_id")
+  uomId        String?        @map("uom_id")
+  reorderPoint Int            @default(10) @map("reorder_point")
+  reorderQty   Int            @default(50) @map("reorder_qty")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  category   Category?      @relation(fields: [categoryId], references: [id])
+  uom        UnitOfMeasure? @relation(fields: [uomId], references: [id])
+  docLines   DocumentLine[]
+  ledgerRows StockLedger[]
+  balances   StockBalance[]
+
+  @@map("products")
+}
+
+model Location {
+  id       String       @id @default(uuid())
+  name     String
+  type     LocationType @default(WAREHOUSE)
+  parentId String?      @map("parent_id")
+  parent   Location?    @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children Location[]   @relation("LocationHierarchy")
+
+  sourceDocs Document[]     @relation("DocumentSourceLocation")
+  destDocs   Document[]     @relation("DocumentDestLocation")
+  ledgerRows StockLedger[]
+  balances   StockBalance[]
+
+  @@map("locations")
+}
+
+model Document {
+  id               String         @id @default(uuid())
+  type             DocumentType
+  status           DocumentStatus @default(DRAFT)
+  sourceLocationId String?        @map("source_location_id")
+  destLocationId   String?        @map("dest_location_id")
+  partnerRef       String?        @map("partner_ref")
+  createdById      String         @map("created_by")
+  validatedById    String?        @map("validated_by")
+  validatedAt      DateTime?      @map("validated_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  sourceLocation Location?      @relation("DocumentSourceLocation", fields: [sourceLocationId], references: [id])
+  destLocation   Location?      @relation("DocumentDestLocation", fields: [destLocationId], references: [id])
+  createdBy      User           @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  validatedBy    User?          @relation("DocumentValidatedBy", fields: [validatedById], references: [id])
+  lines          DocumentLine[]
+  ledgerEntries  StockLedger[]
+
+  @@index([status, type, createdAt])
+  @@map("documents")
+}
+
+model DocumentLine {
+  id          String   @id @default(uuid())
+  documentId  String   @map("document_id")
+  productId   String   @map("product_id")
+  expectedQty Int      @map("expected_qty")
+  actualQty   Int?     @map("actual_qty")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@map("document_lines")
+}
+
+model StockLedger {
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  locationId   String   @map("location_id")
+  documentId   String?  @map("document_id")
+  qtyDelta     Int      @map("qty_delta")
+  balanceAfter Int      @map("balance_after")
+  postedAt     DateTime @default(now()) @map("posted_at")
+  actorId      String   @map("actor_id")
+
+  product  Product   @relation(fields: [productId], references: [id])
+  location Location  @relation(fields: [locationId], references: [id])
+  document Document? @relation(fields: [documentId], references: [id])
+  actor    User      @relation(fields: [actorId], references: [id])
+
+  @@index([productId, locationId, postedAt])
+  @@map("stock_ledger")
+}
+
+model StockBalance {
+  productId  String   @map("product_id")
+  locationId String   @map("location_id")
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@id([productId, locationId])
+  @@map("stock_balances")
+}

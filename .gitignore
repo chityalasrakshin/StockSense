@@ -1,8 +1,10 @@
 # Documents
 StockSense-Research-Architecture.md
+architecture.md
 
 # Environment & Local Configuration
 .env
+.env.local
 .env*.local
 .env.development
 .env.production
@@ -15,11 +17,16 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Reference Repositories (scratch / pattern study only - never committed)
+.reference-repos/
+
 # Build outputs
 dist/
 build/
 out/
 .next/
+.turbo/
+scratch/
 
 # IDE & Editors
 .vscode/

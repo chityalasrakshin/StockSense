@@ -1,0 +1,11 @@
+{
+  "name": "@stocksense/configs",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "exports": {
+    "./eslint": "./eslint.base.mjs",
+    "./prettier": "./.prettierrc.json",
+    "./tsconfig": "./tsconfig.base.json"
+  }
+}
