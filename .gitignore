@@ -1,6 +1,5 @@
-# Documents & Binaries
-*.pdf
-StockSense.pdf
+# Documents
+StockSense-Research-Architecture.md
 
 # Environment & Local Configuration
 .env
