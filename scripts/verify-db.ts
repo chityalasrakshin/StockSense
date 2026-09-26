@@ -69,7 +69,8 @@ async function main() {
       (SELECT COUNT(*) FROM documents) as documents,
       (SELECT COUNT(*) FROM document_lines) as document_lines,
       (SELECT COUNT(*) FROM stock_ledger) as stock_ledger,
-      (SELECT COUNT(*) FROM stock_balances) as stock_balances;
+      (SELECT COUNT(*) FROM stock_balances) as stock_balances,
+      (SELECT COUNT(*) FROM low_stock_alerts) as low_stock_alerts;
   `);
   console.log('\nSeeded Table Row Counts:', countRes.rows[0]);
 

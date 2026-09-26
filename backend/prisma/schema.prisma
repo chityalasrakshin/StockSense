@@ -121,6 +121,7 @@ model Product {
   docLines   DocumentLine[]
   ledgerRows StockLedger[]
   balances   StockBalance[]
+  alerts     LowStockAlert[]
 
   @@index([sku(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -140,6 +141,7 @@ model Location {
   destDocs   Document[]     @relation("DocumentDestLocation")
   ledgerRows StockLedger[]
   balances   StockBalance[]
+  alerts     LowStockAlert[]
 
   @@map("locations")
 }
@@ -244,5 +246,32 @@ model StockBalance {
 
   @@id([productId, locationId])
   @@map("stock_balances")
+}
+
+enum AlertStatus {
+  OPEN
+  RESOLVED
+}
+
+/// LowStockAlert: Self-resolving inventory alerts when balances drop below reorder_point.
+/// Automatically transitions to OPEN on threshold breach, and RESOLVED on stock recovery.
+model LowStockAlert {
+  id           String      @id @default(uuid())
+  productId    String      @map("product_id")
+  locationId   String      @map("location_id")
+  currentStock Int         @default(0) @map("current_stock")
+  reorderPoint Int         @default(0) @map("reorder_point")
+  status       AlertStatus @default(OPEN)
+  openedAt     DateTime    @default(now()) @map("opened_at")
+  resolvedAt   DateTime?   @map("resolved_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, locationId])
+  @@index([status])
+  @@map("low_stock_alerts")
 }
 

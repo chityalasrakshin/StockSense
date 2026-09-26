@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '../../email/email.service';
+import { OtpProducerService } from './otp-producer.service';
 
 export const OTP_EXPIRATION_MINUTES = 10;
 export const MAX_OTP_REQUESTS_IN_WINDOW = 3;
@@ -15,6 +16,7 @@ export class OtpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly otpProducerService: OtpProducerService,
   ) {}
 
   /**
@@ -106,8 +108,12 @@ export class OtpService {
       },
     });
 
-    // Send through Email Provider (plain code delivered to user via email only)
-    await this.emailService.sendPasswordResetOtp(user.email, rawOtp, OTP_EXPIRATION_MINUTES);
+    // Asynchronous dispatch via worker queue (non-blocking)
+    await this.otpProducerService.enqueueOtpEmail({
+      email: user.email,
+      otp: rawOtp,
+      ttlMinutes: OTP_EXPIRATION_MINUTES,
+    });
 
     return genericSuccess;
   }

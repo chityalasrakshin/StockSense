@@ -1,45 +1,59 @@
-import IORedis from 'ioredis';
 import * as dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
+import { redisConnection } from './redis';
+import { createLowStockAlertWorker } from './workers/low-stock-alert.worker';
+import { createEmailOtpWorker } from './workers/email-otp.worker';
 
 dotenv.config();
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
-const redisPort = parseInt(process.env.REDIS_PORT || '6379', 10);
-const redisPassword = process.env.REDIS_PASSWORD || undefined;
+const redisPort = parseInt(process.env.REDIS_PORT || '6380', 10);
 
-console.log(`[StockSense Workers] Initializing runner skeleton...`);
+console.log(`[StockSense Workers] Initializing runner service...`);
 console.log(`[StockSense Workers] Connecting to Redis at ${redisHost}:${redisPort}...`);
 
-export const redisConnection = new IORedis({
-  host: redisHost,
-  port: redisPort,
-  password: redisPassword,
-  maxRetriesPerRequest: null,
-  lazyConnect: true,
+export { redisConnection };
+
+export const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url:
+        process.env.DATABASE_URL ||
+        'postgresql://stocksense:stocksense@localhost:5432/stocksense?schema=public',
+    },
+  },
 });
 
 async function bootstrap() {
   try {
     await redisConnection.connect();
     console.log('[StockSense Workers] Successfully established connection to Redis.');
-  } catch (err) {
+  } catch (err: any) {
     console.warn(
-      `[StockSense Workers] Redis connection pending (${(err as Error).message}). Will reconnect automatically.`,
+      `[StockSense Workers] Redis connection pending (${err.message}). Reconnecting in background...`,
     );
   }
 
-  console.log('[StockSense Workers] Registered workers skeleton:');
-  console.log(' - low-stock-alert: Idle (awaiting Phase 5 document engine)');
-  console.log(' - email-otp: Idle (awaiting Phase 9 auth OTP pipeline)');
-  console.log(' - report-export: Idle (awaiting report export pipeline)');
-  console.log('[StockSense Workers] Runner skeleton initialized and waiting for jobs.');
+  // Initialize workers
+  const lowStockWorker = createLowStockAlertWorker(prisma, redisConnection);
+  const emailOtpWorker = createEmailOtpWorker(undefined, redisConnection);
+
+  console.log('[StockSense Workers] Registered active background workers:');
+  console.log(' - low-stock-alerts: ACTIVE (processing stock.changed events & threshold alerts)');
+  console.log(' - email-otp: ACTIVE (processing otp.requested jobs via swappable email provider)');
+  console.log('[StockSense Workers] Service initialized and listening for jobs.');
 
   const shutdown = async () => {
     console.log('[StockSense Workers] Shutting down workers gracefully...');
     try {
-      await redisConnection.quit();
+      await Promise.all([
+        lowStockWorker.close(),
+        emailOtpWorker.close(),
+        redisConnection.quit(),
+        prisma.$disconnect(),
+      ]);
     } catch {
-      // ignore
+      // ignore errors on exit
     }
     process.exit(0);
   };
@@ -48,7 +62,10 @@ async function bootstrap() {
   process.on('SIGTERM', shutdown);
 }
 
-bootstrap().catch((err) => {
-  console.error('[StockSense Workers] Fatal error in worker bootstrap:', err);
-  process.exit(1);
-});
+// Only auto-run if directly executed (not during tests)
+if (process.env.NODE_ENV !== 'test') {
+  bootstrap().catch((err) => {
+    console.error('[StockSense Workers] Fatal error in worker bootstrap:', err);
+    process.exit(1);
+  });
+}

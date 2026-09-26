@@ -204,7 +204,7 @@ async function main() {
     },
   });
 
-  await prisma.product.upsert({
+  const productBoltsM12 = await prisma.product.upsert({
     where: { sku: 'BOLT-M12-100' },
     update: {
       name: 'M12 Industrial Bolts (100mm)',
@@ -226,7 +226,7 @@ async function main() {
     },
   });
 
-  await prisma.product.upsert({
+  const productOfficeDesk = await prisma.product.upsert({
     where: { sku: 'DESK-001' },
     update: {
       name: 'Office Desk',
@@ -602,6 +602,51 @@ async function main() {
   });
 
   console.log('  ✓ Stock balances synchronized (Main Warehouse: 47kg, Production Rack: 30kg)');
+
+  // 8. Low Stock Alerts (Bolts and Desks have 0 stock <= reorder point)
+  await prisma.lowStockAlert.upsert({
+    where: {
+      productId_locationId: {
+        productId: productBoltsM12.id,
+        locationId: locMainWarehouse.id,
+      },
+    },
+    update: {
+      currentStock: 0,
+      reorderPoint: productBoltsM12.reorderPoint,
+      status: 'OPEN',
+    },
+    create: {
+      productId: productBoltsM12.id,
+      locationId: locMainWarehouse.id,
+      currentStock: 0,
+      reorderPoint: productBoltsM12.reorderPoint,
+      status: 'OPEN',
+    },
+  });
+
+  await prisma.lowStockAlert.upsert({
+    where: {
+      productId_locationId: {
+        productId: productOfficeDesk.id,
+        locationId: locMainWarehouse.id,
+      },
+    },
+    update: {
+      currentStock: 0,
+      reorderPoint: productOfficeDesk.reorderPoint,
+      status: 'OPEN',
+    },
+    create: {
+      productId: productOfficeDesk.id,
+      locationId: locMainWarehouse.id,
+      currentStock: 0,
+      reorderPoint: productOfficeDesk.reorderPoint,
+      status: 'OPEN',
+    },
+  });
+
+  console.log('  ✓ Low stock alerts initialized (M12 Bolts: OPEN, Office Desk: OPEN)');
 
   console.log('\n🎉 StockSense demo dataset successfully seeded! Ready for development.');
 }

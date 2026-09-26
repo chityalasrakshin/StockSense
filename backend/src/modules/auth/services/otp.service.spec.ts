@@ -3,12 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '../../email/email.service';
+import { OtpProducerService } from './otp-producer.service';
 import { OtpService, OTP_EXPIRATION_MINUTES } from './otp.service';
 
 describe('OtpService', () => {
   let service: OtpService;
   let prisma: any;
   let emailService: any;
+  let otpProducerService: any;
 
   const mockUser = {
     id: 'user-uuid-123',
@@ -34,11 +36,16 @@ describe('OtpService', () => {
       sendPasswordResetOtp: jest.fn().mockResolvedValue(undefined),
     };
 
+    otpProducerService = {
+      enqueueOtpEmail: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OtpService,
         { provide: PrismaService, useValue: prisma },
         { provide: EmailService, useValue: emailService },
+        { provide: OtpProducerService, useValue: otpProducerService },
       ],
     }).compile();
 
@@ -112,12 +119,12 @@ describe('OtpService', () => {
       const expectedMinExpiry = new Date(Date.now() + (OTP_EXPIRATION_MINUTES - 1) * 60 * 1000);
       expect(expiresAt.getTime()).toBeGreaterThan(expectedMinExpiry.getTime());
 
-      // Verify email was dispatched with a 6-digit plaintext code
-      expect(emailService.sendPasswordResetOtp).toHaveBeenCalledWith(
-        mockUser.email,
-        expect.stringMatching(/^\d{6}$/),
-        OTP_EXPIRATION_MINUTES,
-      );
+      // Verify email was dispatched asynchronously via OtpProducerService
+      expect(otpProducerService.enqueueOtpEmail).toHaveBeenCalledWith({
+        email: mockUser.email,
+        otp: expect.stringMatching(/^\d{6}$/),
+        ttlMinutes: OTP_EXPIRATION_MINUTES,
+      });
     });
 
     it('should return generic success message if user does not exist (prevent enumeration)', async () => {
@@ -126,7 +133,7 @@ describe('OtpService', () => {
       const result = await service.requestPasswordResetOtp('nonexistent@stocksense.dev');
       expect(result.message).toContain('password reset code has been sent');
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
-      expect(emailService.sendPasswordResetOtp).not.toHaveBeenCalled();
+      expect(otpProducerService.enqueueOtpEmail).not.toHaveBeenCalled();
     });
 
     it('should throw 429 Too Many Requests if rate limit window is exceeded', async () => {

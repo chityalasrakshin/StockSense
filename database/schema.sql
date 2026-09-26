@@ -118,3 +118,22 @@ CREATE TABLE "stock_balances" (
     "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     PRIMARY KEY ("product_id", "location_id")
 );
+
+-- Low Stock Alerts (Self-resolving alerts when balances cross reorder_point)
+CREATE TYPE "AlertStatus" AS ENUM ('OPEN', 'RESOLVED');
+
+CREATE TABLE "low_stock_alerts" (
+    "id" UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    "product_id" UUID NOT NULL REFERENCES "products"("id") ON DELETE CASCADE,
+    "location_id" UUID NOT NULL REFERENCES "locations"("id") ON DELETE CASCADE,
+    "current_stock" INTEGER NOT NULL DEFAULT 0,
+    "reorder_point" INTEGER NOT NULL DEFAULT 0,
+    "status" "AlertStatus" NOT NULL DEFAULT 'OPEN',
+    "opened_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    "resolved_at" TIMESTAMP WITH TIME ZONE,
+    "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT "unique_product_location_alert" UNIQUE ("product_id", "location_id")
+);
+
+CREATE INDEX "idx_low_stock_alerts_status" ON "low_stock_alerts" ("status");

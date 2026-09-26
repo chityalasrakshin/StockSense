@@ -17,7 +17,7 @@ export class IdempotencyService {
 
   constructor(private readonly configService: ConfigService) {
     const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
-    const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
+    const redisPort = this.configService.get<number>('REDIS_PORT', 6380);
 
     const isTest = process.env.NODE_ENV === 'test';
     if (isTest) {

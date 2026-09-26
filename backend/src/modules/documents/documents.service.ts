@@ -141,6 +141,16 @@ export class DocumentsService {
     });
 
     this.logger.log(`Document draft created: [${document.reference}] (${document.type})`);
+
+    this.eventPublisherService?.publishDocumentStatusChanged?.({
+      documentId: document.id,
+      reference: document.reference,
+      type: document.type,
+      oldStatus: null,
+      newStatus: document.status,
+      timestamp: document.createdAt ? new Date(document.createdAt).toISOString() : new Date().toISOString(),
+    })?.catch?.(() => {});
+
     return document as unknown as DocumentItemDto;
   }
 
@@ -294,6 +304,18 @@ export class DocumentsService {
       });
 
       this.logger.log(`Document updated: [${updated.reference}] status=${updated.status}`);
+
+      if (dto.status && dto.status !== document.status) {
+        this.eventPublisherService?.publishDocumentStatusChanged?.({
+          documentId: updated.id,
+          reference: updated.reference,
+          type: updated.type,
+          oldStatus: document.status,
+          newStatus: updated.status,
+          timestamp: new Date().toISOString(),
+        })?.catch?.(() => {});
+      }
+
       return updated as unknown as DocumentItemDto;
     });
   }
@@ -490,6 +512,18 @@ export class DocumentsService {
         this.logger.warn(`Background event publish failed: ${err.message}`);
       });
     }
+
+    // Publish document.status_changed event
+    this.eventPublisherService?.publishDocumentStatusChanged?.({
+      documentId: id,
+      reference: validatedDoc.reference,
+      type: validatedDoc.type,
+      oldStatus: document.status,
+      newStatus: DocumentStatus.DONE,
+      timestamp: validatedAt.toISOString(),
+    })?.catch?.((err) => {
+      this.logger.warn(`Background doc status event publish failed: ${err.message}`);
+    });
 
     this.logger.log(
       `Document validated successfully: [${validatedDoc.reference}] (${validatedDoc.type})`,

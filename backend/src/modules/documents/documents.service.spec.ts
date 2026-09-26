@@ -48,6 +48,7 @@ describe('DocumentsService', () => {
 
     eventPublisherService = {
       publishStockChanged: jest.fn().mockResolvedValue(undefined),
+      publishDocumentStatusChanged: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
