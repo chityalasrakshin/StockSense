@@ -14,17 +14,19 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRealtimeStockUpdates } from '@/lib/realtime';
 
 interface KpiCardsProps {
   initialData?: DashboardKpis;
 }
 
 export function KpiCards({ initialData }: KpiCardsProps) {
+  const realtimeConnected = useRealtimeStockUpdates();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['dashboard', 'kpis'],
     queryFn: getDashboardKpis,
     initialData,
-    refetchInterval: 30000,
+    refetchInterval: realtimeConnected ? false : 30000,
   });
 
   if (isLoading && !data) {

@@ -1,27 +1,20 @@
-FROM node:22-alpine
-
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Enable corepack and install pnpm
 RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
-
-# Copy monorepo workspace configuration and package descriptors
-COPY package.json pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY configs ./configs
-COPY backend/package.json ./backend/
+COPY backend/package.json ./backend/package.json
 COPY backend/prisma ./backend/prisma
-
-# Install backend dependencies
-RUN pnpm install --filter stocksense-backend... --filter @stocksense/configs...
-
-# Copy backend source
+RUN pnpm install --frozen-lockfile --filter backend...
 COPY backend ./backend
-
 WORKDIR /app/backend
+RUN pnpm prisma generate && pnpm build && pnpm --filter backend --prod deploy /prod/backend
 
-# Generate Prisma client
-RUN pnpm prisma generate
-
+FROM node:22-alpine AS runtime
+WORKDIR /app/backend
+ENV NODE_ENV=production PORT=4000
+RUN addgroup -S stocksense && adduser -S stocksense -G stocksense
+COPY --from=build --chown=stocksense:stocksense /prod/backend ./
+USER stocksense
 EXPOSE 4000
-
-CMD ["pnpm", "run", "start:dev"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]

@@ -15,10 +15,12 @@ import { ProductsModule } from './modules/products/products.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ObservabilityModule } from './common/observability/observability.module';
 
 @Module({
   imports: [
     AppConfigModule,
+    ObservabilityModule,
     PrismaModule,
     ThrottlerModule.forRoot([
       {

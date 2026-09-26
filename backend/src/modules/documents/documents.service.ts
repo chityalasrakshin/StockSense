@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -15,6 +16,7 @@ import { UpdateDocumentDto } from './dtos/update-document.dto';
 import { QueryDocumentsDto } from './dtos/query-documents.dto';
 import { DocumentItemDto, PaginatedDocumentsDto } from './dtos/document-response.dto';
 import { DocumentStatus, DocumentType, Prisma, Role } from '@prisma/client';
+import { MetricsService } from '../../common/observability/metrics.service';
 
 @Injectable()
 export class DocumentsService {
@@ -25,6 +27,7 @@ export class DocumentsService {
     private readonly ledgerService: LedgerService,
     private readonly idempotencyService: IdempotencyService,
     private readonly eventPublisherService: EventPublisherService,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   /**
@@ -346,6 +349,7 @@ export class DocumentsService {
     }
 
     const document = await this.findOne(id);
+    const validationTimer = this.metrics?.documentValidationDuration.startTimer();
 
     // 2. State & validation guards
     if (document.status === DocumentStatus.DONE) {
@@ -528,6 +532,7 @@ export class DocumentsService {
     this.logger.log(
       `Document validated successfully: [${validatedDoc.reference}] (${validatedDoc.type})`,
     );
+    validationTimer?.({ type: validatedDoc.type, outcome: 'success' });
     return validatedDoc;
   }
 

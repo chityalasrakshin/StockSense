@@ -3,14 +3,16 @@ import { PrismaClient } from '@prisma/client';
 import { redisConnection } from './redis';
 import { createLowStockAlertWorker } from './workers/low-stock-alert.worker';
 import { createEmailOtpWorker } from './workers/email-otp.worker';
+import * as Sentry from '@sentry/node';
+import { logger } from './logger';
 
 dotenv.config();
+if (process.env.SENTRY_DSN) Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV });
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = parseInt(process.env.REDIS_PORT || '6380', 10);
 
-console.log(`[StockSense Workers] Initializing runner service...`);
-console.log(`[StockSense Workers] Connecting to Redis at ${redisHost}:${redisPort}...`);
+logger.info({ redisHost, redisPort }, 'Initializing worker runner');
 
 export { redisConnection };
 

@@ -1,9 +1,10 @@
-import { BadRequestException, HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmailService } from '../../email/email.service';
 import { OtpProducerService } from './otp-producer.service';
+import { MetricsService } from '../../../common/observability/metrics.service';
 
 export const OTP_EXPIRATION_MINUTES = 10;
 export const MAX_OTP_REQUESTS_IN_WINDOW = 3;
@@ -17,6 +18,7 @@ export class OtpService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly otpProducerService: OtpProducerService,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   /**
@@ -46,6 +48,7 @@ export class OtpService {
    * Rate limited: max 3 requests per 5 minutes per user account.
    */
   async requestPasswordResetOtp(email: string): Promise<{ message: string }> {
+    this.metrics?.otpRequests.inc();
     const genericSuccess = {
       message: 'If an active account exists with that email, a password reset code has been sent.',
     };

@@ -17,14 +17,16 @@ import { Badge } from '@/components/ui/badge';
 import { Icons } from '@/components/icons';
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
+import { useRealtimeStockUpdates } from '@/lib/realtime';
 
 export function LowStockAlertBell() {
   const [open, setOpen] = useState(false);
+  const realtimeConnected = useRealtimeStockUpdates();
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', 'alerts', 'OPEN'],
     queryFn: () => getDashboardAlerts({ status: 'OPEN', limit: 10 }),
-    refetchInterval: 30000, // Polling every 30 seconds
+    refetchInterval: realtimeConnected ? false : 30000,
   });
 
   const alerts: LowStockAlertItem[] = data?.items || [];

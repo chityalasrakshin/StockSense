@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: stocksense, POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stocksense}, POSTGRES_DB: stocksense }
+    volumes: [postgres_prod:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U stocksense -d stocksense"], interval: 5s, timeout: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis_prod:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 5s, retries: 10 }
+  backend:
+    build: { context: ., dockerfile: docker/backend.Dockerfile }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://stocksense:${POSTGRES_PASSWORD:-stocksense}@postgres:5432/stocksense?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports: ["4000:4000"]
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+  workers:
+    build: { context: ., dockerfile: docker/workers.Dockerfile }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://stocksense:${POSTGRES_PASSWORD:-stocksense}@postgres:5432/stocksense?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+  frontend:
+    build: { context: ., dockerfile: docker/frontend.Dockerfile }
+    environment: { NODE_ENV: production, NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1} }
+    ports: ["3000:3000"]
+    depends_on: [backend]
+volumes: { postgres_prod: {}, redis_prod: {} }

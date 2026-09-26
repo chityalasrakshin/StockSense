@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import * as Sentry from '@sentry/node';
 
 export interface FieldError {
   field: string;
@@ -63,6 +64,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+      Sentry.captureException(exception);
       message = exception.message;
     } else {
       this.logger.error(`Unknown exception: ${JSON.stringify(exception)}`);

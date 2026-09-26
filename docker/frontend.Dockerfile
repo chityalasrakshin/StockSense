@@ -1,23 +1,22 @@
-FROM node:22-alpine
-
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Enable corepack and install pnpm
 RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
-
-# Copy monorepo workspace configuration and package descriptors
-COPY package.json pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY configs ./configs
-COPY frontend/package.json ./frontend/
-
-# Install frontend dependencies
-RUN pnpm install --filter stocksense-frontend... --filter @stocksense/configs...
-
-# Copy frontend source
+COPY frontend/package.json ./frontend/package.json
+RUN pnpm install --frozen-lockfile --filter frontend...
 COPY frontend ./frontend
-
 WORKDIR /app/frontend
+ENV BUILD_STANDALONE=true
+RUN pnpm build
 
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production PORT=3000
+RUN addgroup -S stocksense && adduser -S stocksense -G stocksense
+COPY --from=build --chown=stocksense:stocksense /app/frontend/.next/standalone ./
+COPY --from=build --chown=stocksense:stocksense /app/frontend/.next/static ./frontend/.next/static
+COPY --from=build --chown=stocksense:stocksense /app/frontend/public ./frontend/public
+USER stocksense
 EXPOSE 3000
-
-CMD ["pnpm", "run", "dev"]
+CMD ["node", "frontend/server.js"]

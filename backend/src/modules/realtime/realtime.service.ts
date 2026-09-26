@@ -4,7 +4,7 @@ import IORedis from 'ioredis';
 import { Subject } from 'rxjs';
 
 export interface RealtimeEvent {
-  type: 'stock.changed';
+  type: 'stock.changed' | 'document.status_changed' | 'alert.low_stock';
   data: Record<string, unknown>;
 }
 
@@ -31,17 +31,17 @@ export class RealtimeService implements OnModuleInit, OnModuleDestroy {
     });
     this.subscriber.on('error', (error) => this.logger.warn(`Realtime Redis error: ${error.message}`));
     this.subscriber.on('message', (channel, raw) => {
-      if (channel !== 'stock.changed') return;
+      if (!['stock.changed', 'document.status_changed', 'alert.low_stock'].includes(channel)) return;
       try {
-        this.eventsSubject.next({ type: 'stock.changed', data: JSON.parse(raw) });
+        this.eventsSubject.next({ type: channel as RealtimeEvent['type'], data: JSON.parse(raw) });
       } catch {
         this.logger.warn('Ignored malformed stock.changed event');
       }
     });
     try {
       await this.subscriber.connect();
-      await this.subscriber.subscribe('stock.changed');
-      this.logger.log('Realtime subscriber listening on stock.changed');
+      await this.subscriber.subscribe('stock.changed', 'document.status_changed', 'alert.low_stock');
+      this.logger.log('Realtime subscriber listening on Redis event channels');
     } catch (error) {
       this.logger.warn(`Realtime disabled until Redis is available: ${(error as Error).message}`);
       this.subscriber.disconnect();

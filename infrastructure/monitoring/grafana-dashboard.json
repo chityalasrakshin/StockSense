@@ -1,0 +1,1 @@
+{"title":"StockSense","panels":[{"title":"Document validation latency","type":"timeseries","targets":[{"expr":"histogram_quantile(0.95, sum(rate(stocksense_document_validation_duration_seconds_bucket[5m])) by (le))"}]},{"title":"Queue depth","type":"timeseries","targets":[{"expr":"stocksense_queue_depth"}]}],"schemaVersion":39}

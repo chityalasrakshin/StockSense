@@ -24,6 +24,8 @@ export const envSchema = z.object({
   MINIO_ROOT_USER: z.string().default('minioadmin'),
   MINIO_ROOT_PASSWORD: z.string().default('minioadmin'),
   MINIO_BUCKET_NAME: z.string().default('stocksense-storage'),
+  SENTRY_DSN: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

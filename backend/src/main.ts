@@ -1,3 +1,5 @@
+import './instrumentation';
+import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -6,10 +8,14 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { JsonLoggerService } from './common/observability/json-logger.service';
+import { RequestIdMiddleware } from './common/observability/request-id.middleware';
 
 async function bootstrap() {
+  if (process.env.SENTRY_DSN) Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV, tracesSampleRate: 0.1 });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(JsonLoggerService));
   const logger = new Logger('StockSenseBootstrap');
-  const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);
@@ -23,6 +29,8 @@ async function bootstrap() {
 
   // Cookie parser middleware for httpOnly refresh tokens
   app.use(cookieParser(cookieSecret));
+  const requestIdMiddleware = new RequestIdMiddleware();
+  app.use(requestIdMiddleware.use.bind(requestIdMiddleware));
 
   // Enable CORS
   app.enableCors({

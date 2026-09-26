@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { currentRequestId } from '../../../common/observability/request-context';
+import { MetricsService } from '../../../common/observability/metrics.service';
 
 export interface StockChangedEvent {
   productId: string;
@@ -30,7 +32,7 @@ export class EventPublisherService {
   private alertQueue: Queue | null = null;
   private static readonly invalidationListeners: Set<InvalidationCallback> = new Set();
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly configService: ConfigService, @Optional() private readonly metrics?: MetricsService) {
     const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
     const redisPort = this.configService.get<number>('REDIS_PORT', 6380);
 
@@ -124,10 +126,12 @@ export class EventPublisherService {
     // 3. Push job to BullMQ queue for async low-stock evaluation
     if (this.alertQueue) {
       try {
-        await this.alertQueue.add('stock.changed', event, {
+        await this.alertQueue.add('stock.changed', { ...event, correlationId: currentRequestId() }, {
           removeOnComplete: 100,
           removeOnFail: 500,
         });
+        const counts = await this.alertQueue.getJobCounts('waiting', 'delayed', 'prioritized');
+        this.metrics?.queueDepth.set({ queue: 'low-stock-alerts' }, (counts.waiting || 0) + (counts.delayed || 0) + (counts.prioritized || 0));
       } catch (err) {
         this.logger.warn(`Failed to enqueue job to low-stock-alerts: ${(err as Error).message}`);
       }

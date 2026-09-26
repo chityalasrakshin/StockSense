@@ -303,6 +303,14 @@ pnpm run typecheck
 pnpm run lint
 ```
 
+### Screen Recording Walkthrough (Jury Demo)
+
+To drive the automated 2.5–3 minute screen-recording walkthrough of StockSense in headed mode at 1920x1080 viewport (ready for direct OBS video capture):
+
+```bash
+npx playwright test tests/demo/jury-demo.spec.ts --headed
+```
+
 ---
 
 ## Prototype Acceptance Criteria

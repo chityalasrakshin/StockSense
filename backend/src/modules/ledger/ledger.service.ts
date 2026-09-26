@@ -3,11 +3,13 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma, StockLedger, StockBalance } from '@prisma/client';
 import { QueryLedgerDto } from './dtos/query-ledger.dto';
 import { PaginatedLedgerDto, StockLedgerEntryDto } from './dtos/ledger-response.dto';
+import { MetricsService } from '../../common/observability/metrics.service';
 
 export interface AppendLedgerEntryDto {
   productId: string;
@@ -50,7 +52,7 @@ export interface ILedgerService {
 export class LedgerService implements ILedgerService {
   private readonly logger = new Logger(LedgerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, @Optional() private readonly metrics?: MetricsService) {}
 
   /**
    * THE SINGLE WRITE CHOKE POINT:
@@ -114,6 +116,7 @@ export class LedgerService implements ILedgerService {
         `Ledger append: Product=${entry.productId}, Location=${entry.locationId}, Delta=${entry.qtyDelta >= 0 ? '+' : ''}${entry.qtyDelta}, BalanceAfter=${newQty}, Doc=${entry.documentId ?? 'INITIAL'}`,
       );
 
+      this.metrics?.ledgerWrites.inc();
       return ledgerEntry;
     };
 
