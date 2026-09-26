@@ -1,5 +1,5 @@
 {
-  "name": "stocksense-backend",
+  "name": "backend",
   "version": "1.0.0",
   "private": true,
   "description": "StockSense Backend API — NestJS, Prisma, PostgreSQL",
@@ -13,6 +13,7 @@
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "test": "jest",
+    "prisma": "prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

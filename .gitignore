@@ -9,6 +9,8 @@ architecture.md
 .env.development
 .env.production
 .env.test
+.pgdata/
+data/
 
 # Dependencies
 node_modules/
@@ -26,6 +28,7 @@ build/
 out/
 .next/
 .turbo/
+*.tsbuildinfo
 scratch/
 
 # IDE & Editors

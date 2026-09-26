@@ -1,10 +1,12 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 enum Role {
@@ -102,6 +104,8 @@ model Product {
   ledgerRows StockLedger[]
   balances   StockBalance[]
 
+  @@index([sku(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("products")
 }
 
@@ -158,6 +162,9 @@ model DocumentLine {
   @@map("document_lines")
 }
 
+/// StockLedger: Immutable, append-only source of truth for all inventory movements.
+/// INVARIANT: Never perform UPDATE or DELETE on this table anywhere in the codebase.
+/// Every physical stock movement (receipt, delivery, transfer, adjustment) inserts here.
 model StockLedger {
   id           String   @id @default(uuid())
   productId    String   @map("product_id")
@@ -177,6 +184,10 @@ model StockLedger {
   @@map("stock_ledger")
 }
 
+/// StockBalance: Derived read-model cache of stock_ledger for O(1) balance and KPI reads.
+/// INVARIANT: Kept in atomic sync with stock_ledger writes inside the document validation transaction.
+/// Locked with SELECT ... FOR UPDATE during validation to eliminate race conditions.
+/// DB CHECK constraint enforces quantity >= 0 (no backorders at this stage).
 model StockBalance {
   productId  String   @map("product_id")
   locationId String   @map("location_id")
@@ -189,3 +200,4 @@ model StockBalance {
   @@id([productId, locationId])
   @@map("stock_balances")
 }
+
