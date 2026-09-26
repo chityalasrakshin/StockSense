@@ -68,6 +68,10 @@ async function bootstrap() {
     .addTag('Health', 'System health checks')
     .addTag('Auth', 'Authentication, JWT rotation, and OTP password reset')
     .addTag('Users', 'User CRUD and RBAC role verification (Manager vs Staff)')
+    .addTag('Products', 'Product master data CRUD, initial stock setup, and pg_trgm fuzzy search')
+    .addTag('Categories', 'Product category tree hierarchy and CRUD')
+    .addTag('Units of Measure', 'Inventory units of measure (kg, pcs, box, etc.)')
+    .addTag('Warehouses', 'Multi-warehouse locations tree (Warehouse, Zone, Rack, Bin)')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

@@ -7,6 +7,11 @@ import { HealthModule } from './modules/health/health.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { UomsModule } from './modules/uoms/uoms.module';
+import { WarehousesModule } from './modules/warehouses/warehouses.module';
+import { ProductsModule } from './modules/products/products.module';
 
 @Module({
   imports: [
@@ -23,6 +28,11 @@ import { UsersModule } from './modules/users/users.module';
     EmailModule,
     AuthModule,
     UsersModule,
+    LedgerModule,
+    CategoriesModule,
+    UomsModule,
+    WarehousesModule,
+    ProductsModule,
   ],
   providers: [
     {

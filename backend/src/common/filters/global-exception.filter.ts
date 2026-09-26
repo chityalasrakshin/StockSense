@@ -44,7 +44,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       } else if (typeof res === 'object' && res !== null) {
         const resObj = res as Record<string, unknown>;
         message = (resObj.message as string) || exception.message;
-        code = (resObj.error as string) || this.statusCodeToErrorCode(status);
+        code =
+          typeof resObj.error === 'string' && resObj.error.length > 0
+            ? (resObj.error as string).toUpperCase().replace(/\s+/g, '_')
+            : this.statusCodeToErrorCode(status);
 
         if (Array.isArray(resObj.message)) {
           message = 'Validation failed';

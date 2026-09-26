@@ -26,6 +26,7 @@ pnpm-debug.log*
 dist/
 build/
 out/
+coverage/
 .next/
 .turbo/
 *.tsbuildinfo
