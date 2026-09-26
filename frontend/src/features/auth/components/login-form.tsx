@@ -10,16 +10,18 @@ export function LoginForm() {
   const [email, setEmail] = useState('manager@stocksense.local');
   const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
-      await login({ email, password });
+      const response = await login({ email, password });
+      window.localStorage.setItem('stocksense_access_token', response.accessToken);
       window.location.href = '/dashboard/overview';
-    } catch {
-      // Stub fallback
-      window.location.href = '/dashboard/overview';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
     } finally {
       setLoading(false);
     }
@@ -50,6 +52,7 @@ export function LoginForm() {
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? 'Signing in...' : 'Sign In'}
       </Button>
+      {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
     </form>
   );
 }

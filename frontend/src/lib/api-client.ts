@@ -25,9 +25,11 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
     ? endpoint
     : `${BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('stocksense_access_token') : null;
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
     ...options,

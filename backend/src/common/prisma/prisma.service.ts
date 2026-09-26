@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  // Optional until the low-stock alert migration is enabled in the deployed schema.
+  readonly lowStockAlert!: any;
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
