@@ -72,6 +72,11 @@ async function bootstrap() {
     .addTag('Categories', 'Product category tree hierarchy and CRUD')
     .addTag('Units of Measure', 'Inventory units of measure (kg, pcs, box, etc.)')
     .addTag('Warehouses', 'Multi-warehouse locations tree (Warehouse, Zone, Rack, Bin)')
+    .addTag(
+      'Documents',
+      'Inventory workflow documents (Receipts, Deliveries, Transfers, Adjustments) with state machine lifecycle and transactional validation',
+    )
+    .addTag('Stock Ledger', 'Append-only audit trail and Move History query endpoint')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

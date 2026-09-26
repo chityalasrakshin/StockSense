@@ -12,6 +12,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { UomsModule } from './modules/uoms/uoms.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { ProductsModule } from './modules/products/products.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ProductsModule } from './modules/products/products.module';
     UomsModule,
     WarehousesModule,
     ProductsModule,
+    DocumentsModule,
   ],
   providers: [
     {

@@ -1,15 +1,22 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma, StockLedger, StockBalance } from '@prisma/client';
+import { QueryLedgerDto } from './dtos/query-ledger.dto';
+import { PaginatedLedgerDto, StockLedgerEntryDto } from './dtos/ledger-response.dto';
 
 export interface AppendLedgerEntryDto {
   productId: string;
   locationId: string;
   documentId?: string | null;
   qtyDelta: number;
-  balanceAfter?: number;
   actorId: string;
   postedAt?: Date;
+  allowNegative?: boolean;
 }
 
 export interface RecordInitialStockDto {
@@ -20,15 +27,17 @@ export interface RecordInitialStockDto {
 }
 
 export interface ILedgerService {
+  append(
+    entry: AppendLedgerEntryDto,
+    txClient?: Prisma.TransactionClient,
+  ): Promise<StockLedger>;
+
   recordInitialStock(
     dto: RecordInitialStockDto,
     txClient?: Prisma.TransactionClient,
   ): Promise<{ ledgerEntry: StockLedger; balance: StockBalance }>;
 
-  append(
-    entry: AppendLedgerEntryDto,
-    txClient?: Prisma.TransactionClient,
-  ): Promise<StockLedger>;
+  findMoveHistory(query: QueryLedgerDto): Promise<PaginatedLedgerDto>;
 
   getBalance(
     productId: string,
@@ -44,128 +53,186 @@ export class LedgerService implements ILedgerService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Records the initial stock entry for a newly created product onboarding into a warehouse.
-   * Creates exactly one row in stock_ledger and updates/creates the corresponding stock_balances row.
-   */
-  async recordInitialStock(
-    dto: RecordInitialStockDto,
-    txClient?: Prisma.TransactionClient,
-  ): Promise<{ ledgerEntry: StockLedger; balance: StockBalance }> {
-    const client = txClient || this.prisma;
-
-    if (dto.quantity < 0) {
-      throw new BadRequestException('Initial stock quantity cannot be negative');
-    }
-
-    // 1. Upsert stock_balances row
-    const balance = await client.stockBalance.upsert({
-      where: {
-        productId_locationId: {
-          productId: dto.productId,
-          locationId: dto.locationId,
-        },
-      },
-      update: {
-        quantity: {
-          increment: dto.quantity,
-        },
-      },
-      create: {
-        productId: dto.productId,
-        locationId: dto.locationId,
-        quantity: dto.quantity,
-      },
-    });
-
-    // 2. Append immutable stock_ledger entry
-    const ledgerEntry = await client.stockLedger.create({
-      data: {
-        productId: dto.productId,
-        locationId: dto.locationId,
-        documentId: null,
-        qtyDelta: dto.quantity,
-        balanceAfter: balance.quantity,
-        actorId: dto.actorId,
-        postedAt: new Date(),
-      },
-    });
-
-    this.logger.log(
-      `Initial stock recorded: Product=${dto.productId}, Location=${dto.locationId}, Qty=+${dto.quantity}, NewBalance=${balance.quantity}`,
-    );
-
-    return { ledgerEntry, balance };
-  }
-
-  /**
-   * Append-only ledger write helper for inventory transactions.
-   * INVARIANT: Never bypass this method or write to stock_balances directly.
+   * THE SINGLE WRITE CHOKE POINT:
+   * Architectural invariant from architecture.md section 8 & 11:
+   * This is the ONLY code path in the entire codebase permitted to insert into
+   * `stock_ledger` or mutate `stock_balances`.
+   *
+   * Executes within a PostgreSQL transaction with pessimistic row-locking (`SELECT ... FOR UPDATE`)
+   * to guarantee zero race-condition double counting and strong consistency.
    */
   async append(
     entry: AppendLedgerEntryDto,
     txClient?: Prisma.TransactionClient,
   ): Promise<StockLedger> {
-    const executeInTx = async (tx: Prisma.TransactionClient) => {
-      // Fetch or initialize current balance
-      const current = await tx.stockBalance.findUnique({
-        where: {
-          productId_locationId: {
-            productId: entry.productId,
-            locationId: entry.locationId,
-          },
-        },
-      });
+    const executeInTransaction = async (tx: Prisma.TransactionClient): Promise<StockLedger> => {
+      // 1. Ensure the target stock_balances row exists so Postgres FOR UPDATE has an actual row to lock
+      await tx.$executeRaw`
+        INSERT INTO stock_balances (product_id, location_id, quantity, updated_at)
+        VALUES (${entry.productId}, ${entry.locationId}, 0, NOW())
+        ON CONFLICT (product_id, location_id) DO NOTHING;
+      `;
 
-      const currentQty = current?.quantity ?? 0;
+      // 2. Acquire exclusive pessimistic row lock (SELECT ... FOR UPDATE) on the affected balance row
+      const lockedRows = await tx.$queryRaw<Array<{ quantity: number }>>`
+        SELECT quantity FROM stock_balances
+        WHERE product_id = ${entry.productId} AND location_id = ${entry.locationId}
+        FOR UPDATE;
+      `;
+
+      const currentQty = lockedRows.length > 0 ? Number(lockedRows[0].quantity) : 0;
       const newQty = currentQty + entry.qtyDelta;
 
-      if (newQty < 0) {
-        throw new BadRequestException(
-          `Insufficient stock at location: current=${currentQty}, requested delta=${entry.qtyDelta}`,
+      // 3. Strict business-rule check against negative inventory (Clean HTTP 409 conflict, not DB crash)
+      if (newQty < 0 && !entry.allowNegative) {
+        throw new ConflictException(
+          `Insufficient stock for product ${entry.productId} at location ${entry.locationId}: available on-hand is ${currentQty}, attempted reduction is ${Math.abs(entry.qtyDelta)}`,
         );
       }
 
-      const balance = await tx.stockBalance.upsert({
-        where: {
-          productId_locationId: {
-            productId: entry.productId,
-            locationId: entry.locationId,
-          },
-        },
-        update: {
-          quantity: newQty,
-        },
-        create: {
-          productId: entry.productId,
-          locationId: entry.locationId,
-          quantity: newQty,
-        },
-      });
+      // 4. Update the locked stock_balances cache row
+      await tx.$executeRaw`
+        UPDATE stock_balances
+        SET quantity = ${newQty}, updated_at = NOW()
+        WHERE product_id = ${entry.productId} AND location_id = ${entry.locationId};
+      `;
 
+      // 5. Append immutable Stock Ledger entry
       const ledgerEntry = await tx.stockLedger.create({
         data: {
           productId: entry.productId,
           locationId: entry.locationId,
           documentId: entry.documentId ?? null,
           qtyDelta: entry.qtyDelta,
-          balanceAfter: entry.balanceAfter ?? balance.quantity,
+          balanceAfter: newQty,
           actorId: entry.actorId,
           postedAt: entry.postedAt ?? new Date(),
         },
       });
 
+      this.logger.log(
+        `Ledger append: Product=${entry.productId}, Location=${entry.locationId}, Delta=${entry.qtyDelta >= 0 ? '+' : ''}${entry.qtyDelta}, BalanceAfter=${newQty}, Doc=${entry.documentId ?? 'INITIAL'}`,
+      );
+
       return ledgerEntry;
     };
 
     if (txClient) {
-      return executeInTx(txClient);
+      return executeInTransaction(txClient);
     } else {
-      return this.prisma.$transaction((tx) => executeInTx(tx));
+      return this.prisma.$transaction((tx) => executeInTransaction(tx));
     }
   }
 
   /**
-   * Read-model query for current on-hand stock quantity.
+   * Onboarding helper for initial product stock.
+   * Internally routes through `this.append()` to preserve the single-choke-point invariant.
+   */
+  async recordInitialStock(
+    dto: RecordInitialStockDto,
+    txClient?: Prisma.TransactionClient,
+  ): Promise<{ ledgerEntry: StockLedger; balance: StockBalance }> {
+    if (dto.quantity < 0) {
+      throw new BadRequestException('Initial stock quantity cannot be negative');
+    }
+
+    const ledgerEntry = await this.append(
+      {
+        productId: dto.productId,
+        locationId: dto.locationId,
+        documentId: null,
+        qtyDelta: dto.quantity,
+        actorId: dto.actorId,
+      },
+      txClient,
+    );
+
+    const client = txClient || this.prisma;
+    const balance = (await client.stockBalance.findUnique({
+      where: {
+        productId_locationId: {
+          productId: dto.productId,
+          locationId: dto.locationId,
+        },
+      },
+    }))!;
+
+    return { ledgerEntry, balance };
+  }
+
+  /**
+   * Move History: Query the append-only stock_ledger audit trail with filters and pagination.
+   */
+  async findMoveHistory(query: QueryLedgerDto): Promise<PaginatedLedgerDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.StockLedgerWhereInput = {};
+
+    if (query.product) {
+      const p = query.product.trim();
+      where.product = {
+        OR: [
+          { id: p },
+          { sku: { equals: p, mode: 'insensitive' } },
+          { name: { contains: p, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    if (query.location) {
+      const loc = query.location.trim();
+      where.location = {
+        OR: [
+          { id: loc },
+          { shortCode: { equals: loc, mode: 'insensitive' } },
+          { name: { contains: loc, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    if (query.from || query.to) {
+      where.postedAt = {};
+      if (query.from) {
+        where.postedAt.gte = new Date(query.from);
+      }
+      if (query.to) {
+        where.postedAt.lte = new Date(query.to);
+      }
+    }
+
+    const [entries, totalItems] = await Promise.all([
+      this.prisma.stockLedger.findMany({
+        where,
+        include: {
+          product: { select: { id: true, sku: true, name: true } },
+          location: { select: { id: true, shortCode: true, name: true, type: true } },
+          document: { select: { id: true, reference: true, type: true, status: true } },
+          actor: { select: { id: true, email: true, role: true } },
+        },
+        orderBy: { postedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.stockLedger.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit) || 1;
+
+    return {
+      items: entries as StockLedgerEntryDto[],
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  /**
+   * Fast O(1) balance check from derived read-model cache.
    */
   async getBalance(
     productId: string,

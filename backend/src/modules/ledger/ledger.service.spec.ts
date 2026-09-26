@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
@@ -10,12 +10,15 @@ describe('LedgerService', () => {
   beforeEach(async () => {
     prisma = {
       stockBalance: {
-        upsert: jest.fn(),
         findUnique: jest.fn(),
       },
       stockLedger: {
         create: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
       },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue([{ quantity: 50 }]),
       $transaction: jest.fn((cb) => cb(prisma)),
     };
 
@@ -29,70 +32,96 @@ describe('LedgerService', () => {
     service = module.get<LedgerService>(LedgerService);
   });
 
-  describe('recordInitialStock', () => {
-    it('creates exactly one stock_balances row and one stock_ledger entry', async () => {
-      const mockBalance = {
+  describe('append (Single Choke Point with SELECT ... FOR UPDATE)', () => {
+    it('locks balance row, updates stock balance and creates ledger entry', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ quantity: 50 }]);
+      const mockLedger = {
+        id: 'entry-1',
         productId: 'prod-1',
         locationId: 'loc-1',
-        quantity: 100,
-        updatedAt: new Date(),
-      };
-
-      const mockLedgerEntry = {
-        id: 'ledger-entry-1',
-        productId: 'prod-1',
-        locationId: 'loc-1',
-        documentId: null,
-        qtyDelta: 100,
-        balanceAfter: 100,
+        qtyDelta: 30,
+        balanceAfter: 80,
         actorId: 'user-1',
         postedAt: new Date(),
       };
+      prisma.stockLedger.create.mockResolvedValue(mockLedger);
 
-      prisma.stockBalance.upsert.mockResolvedValue(mockBalance);
-      prisma.stockLedger.create.mockResolvedValue(mockLedgerEntry);
-
-      const result = await service.recordInitialStock({
+      const result = await service.append({
         productId: 'prod-1',
         locationId: 'loc-1',
-        quantity: 100,
+        qtyDelta: 30,
         actorId: 'user-1',
       });
 
-      expect(prisma.stockBalance.upsert).toHaveBeenCalledTimes(1);
-      expect(prisma.stockBalance.upsert).toHaveBeenCalledWith({
-        where: {
-          productId_locationId: {
-            productId: 'prod-1',
-            locationId: 'loc-1',
-          },
-        },
-        update: {
-          quantity: { increment: 100 },
-        },
-        create: {
-          productId: 'prod-1',
-          locationId: 'loc-1',
-          quantity: 100,
-        },
-      });
-
-      expect(prisma.stockLedger.create).toHaveBeenCalledTimes(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(2); // insert on conflict, then update
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1); // SELECT ... FOR UPDATE
       expect(prisma.stockLedger.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             productId: 'prod-1',
             locationId: 'loc-1',
-            qtyDelta: 100,
-            balanceAfter: 100,
+            qtyDelta: 30,
+            balanceAfter: 80,
             actorId: 'user-1',
-            documentId: null,
           }),
         }),
       );
+      expect(result).toEqual(mockLedger);
+    });
 
-      expect(result.ledgerEntry).toEqual(mockLedgerEntry);
-      expect(result.balance).toEqual(mockBalance);
+    it('throws clean 409 ConflictException if reduction takes stock balance negative', async () => {
+      prisma.$queryRaw.mockResolvedValue([{ quantity: 10 }]);
+
+      await expect(
+        service.append({
+          productId: 'prod-1',
+          locationId: 'loc-1',
+          qtyDelta: -25,
+          actorId: 'user-1',
+          allowNegative: false,
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      await expect(
+        service.append({
+          productId: 'prod-1',
+          locationId: 'loc-1',
+          qtyDelta: -25,
+          actorId: 'user-1',
+          allowNegative: false,
+        }),
+      ).rejects.toThrow(/Insufficient stock/);
+    });
+  });
+
+  describe('recordInitialStock', () => {
+    it('delegates to append and returns created ledger and balance', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ quantity: 0 }]);
+      const mockLedger = {
+        id: 'entry-init',
+        productId: 'prod-1',
+        locationId: 'loc-1',
+        qtyDelta: 100,
+        balanceAfter: 100,
+        actorId: 'user-1',
+        postedAt: new Date(),
+      };
+      prisma.stockLedger.create.mockResolvedValue(mockLedger);
+      prisma.stockBalance.findUnique.mockResolvedValue({
+        productId: 'prod-1',
+        locationId: 'loc-1',
+        quantity: 100,
+      });
+
+      const res = await service.recordInitialStock({
+        productId: 'prod-1',
+        locationId: 'loc-1',
+        quantity: 100,
+        actorId: 'user-1',
+      });
+
+      expect(res.ledgerEntry).toEqual(mockLedger);
+      expect(res.balance.quantity).toBe(100);
     });
 
     it('rejects negative initial stock with BadRequestException', async () => {
@@ -107,38 +136,24 @@ describe('LedgerService', () => {
     });
   });
 
-  describe('append', () => {
-    it('appends ledger entry and updates balance atomically', async () => {
-      prisma.stockBalance.findUnique.mockResolvedValue({ quantity: 50 });
-      prisma.stockBalance.upsert.mockResolvedValue({ quantity: 80 });
-      prisma.stockLedger.create.mockResolvedValue({ id: 'l2', qtyDelta: 30, balanceAfter: 80 });
+  describe('findMoveHistory', () => {
+    it('returns paginated ledger audit trail', async () => {
+      prisma.stockLedger.findMany.mockResolvedValue([
+        {
+          id: 'l1',
+          productId: 'p1',
+          locationId: 'loc1',
+          qtyDelta: 50,
+          balanceAfter: 50,
+          postedAt: new Date(),
+        },
+      ]);
+      prisma.stockLedger.count.mockResolvedValue(1);
 
-      const entry = await service.append({
-        productId: 'prod-1',
-        locationId: 'loc-1',
-        qtyDelta: 30,
-        actorId: 'user-1',
-      });
-
-      expect(prisma.stockBalance.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          update: { quantity: 80 },
-        }),
-      );
-      expect(entry.balanceAfter).toBe(80);
-    });
-
-    it('throws BadRequestException if negative delta causes negative stock balance', async () => {
-      prisma.stockBalance.findUnique.mockResolvedValue({ quantity: 10 });
-
-      await expect(
-        service.append({
-          productId: 'prod-1',
-          locationId: 'loc-1',
-          qtyDelta: -20,
-          actorId: 'user-1',
-        }),
-      ).rejects.toThrow(BadRequestException);
+      const res = await service.findMoveHistory({ page: 1, limit: 10 });
+      expect(res.items.length).toBe(1);
+      expect(res.meta.totalItems).toBe(1);
+      expect(prisma.stockLedger.findMany).toHaveBeenCalled();
     });
   });
 
